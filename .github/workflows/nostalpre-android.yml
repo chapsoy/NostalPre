@@ -1,0 +1,61 @@
+name: Build NostalPre Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+
+env:
+  ANDROID_API: 26
+  ANDROID_ABI: arm64-v8a
+  NDK_VERSION: 30.0.16248370
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: sdkmanager "ndk;${NDK_VERSION}"
+
+      - name: Set up Rust and Android target
+        run: |
+          rustup update stable
+          rustup target add aarch64-linux-android
+          cargo install cargo-ndk --locked
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build python3 python3-pip pkg-config libssl-dev zlib1g-dev
+
+      - name: Build NostalPre APK
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION"
+          test -x "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+          chmod +x android/gradlew scripts/*.sh
+          ./scripts/build-apk.sh
+          mkdir -p release
+          cp out/nostalre.apk release/NostalPre-debug-arm64.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NostalPre-Android-APK
+          path: release/NostalPre-debug-arm64.apk
+          if-no-files-found: error
+          retention-days: 14
